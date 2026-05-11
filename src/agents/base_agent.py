@@ -19,47 +19,45 @@ class BaseAgent:
 
         self.system_prompt = get_system_prompt()
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.context: list = [
+            {"role": "system", "content": self.system_prompt},
+        ]
 
     async def run(
         self,
         user_input: str,
     ):
-        context: list = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_input},
-        ]
+        self.context.append({"role": "user", "content": user_input})
 
         print("正在思考...", "==" * 20)
 
         for _ in range(MAX_ITERATIONS):
             print(f"第 {_ + 1} 次迭代")
-            message, error = await self._call_llm(context)
+            message, error = await self._call_llm(self.context)
             if error:
                 return error
             assert message is not None
 
             if message.tool_calls:
-                self._append_assistant_with_tools(context, message)
+                self._append_assistant_with_tools(self.context, message)
                 results = await self._execute_tools(message.tool_calls)
-                self._append_tool_results(context, message.tool_calls, results)
+                self._append_tool_results(self.context, message.tool_calls, results)
                 continue
 
-            print("上下文: ", context, "=" * 20)
+            print("上下文: ", self.context, "=" * 20)
+            self.context.append({"role": "assistant", "content": message.content})
             return message.content
 
         return "已达到最大迭代次数，请尝试简化你的问题。"
 
     async def run_stream(self, user_input: str):
-        context: list = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_input},
-        ]
+        self.context.append({"role": "user", "content": user_input})
 
         print("正在思考...", "==" * 20)
 
         for _ in range(MAX_ITERATIONS):
             print(f"第 {_ + 1} 次迭代")
-            response, error = await self._call_llm_stream(context)
+            response, error = await self._call_llm_stream(self.context)
             if error:
                 yield error
                 return
@@ -122,11 +120,14 @@ class BaseAgent:
                     tool_calls=tc_objects,
                     reasoning_content="".join(reasoning_parts) or None,
                 )
-                self._append_assistant_with_tools(context, message_like)
+                self._append_assistant_with_tools(self.context, message_like)
                 results = await self._execute_tools(tc_objects)
-                self._append_tool_results(context, tc_objects, results)
+                self._append_tool_results(self.context, tc_objects, results)
                 continue
 
+            self.context.append(
+                {"role": "assistant", "content": "".join(content_parts)}
+            )
             return
 
         yield "已达到最大迭代次数，请尝试简化你的问题。"
@@ -189,7 +190,6 @@ class BaseAgent:
         results = []
         for tc in tool_calls:
             func_name = tc.function.name
-            print("调用工具:", func_name)
             handler = TOOL_HANDLERS[func_name]
 
             if handler is None:
@@ -198,6 +198,7 @@ class BaseAgent:
 
             try:
                 args = json.loads(tc.function.arguments)
+                print("🧰调用工具:", func_name, "📖工具参数", args, "=" * 20)
                 if inspect.iscoroutinefunction(handler):
                     result = await handler(**args)
                 else:

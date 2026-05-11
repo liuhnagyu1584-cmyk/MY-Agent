@@ -20,5 +20,16 @@ async def main_stream():
     print("\n" + "=" * 60)
 
 
+async def continuous():
+    agent = BaseAgent()
+    while True:
+        user_input = input("请输入: ")
+        if user_input == "exit" or user_input == "q":
+            break
+        async for chunk in agent.run_stream(user_input):
+            print(chunk, end="", flush=True)
+        print("\n" + "=" * 60)
+
+
 if __name__ == "__main__":
-    asyncio.run(main_stream())
+    asyncio.run(continuous())
