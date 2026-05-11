@@ -1,5 +1,6 @@
 import inspect
 import json
+from types import SimpleNamespace
 from configs.base_config import (
     MAX_ITERATIONS,
     MODEL_API_KEY,
@@ -32,15 +33,10 @@ class BaseAgent:
 
         for _ in range(MAX_ITERATIONS):
             print(f"第 {_ + 1} 次迭代")
-            try:
-                response = await self.client.chat.completions.create(
-                    model=MODEL_NAME, messages=context, tools=TOOL_DEFINITIONS
-                )
-            except Exception as e:
-                print(f"[错误] API 调用失败：{e}")
-                return f"API 调用失败：{e}"
-
-            message = response.choices[0].message
+            message, error = await self._call_llm(context)
+            if error:
+                return error
+            assert message is not None
 
             if message.tool_calls:
                 self._append_assistant_with_tools(context, message)
@@ -52,6 +48,111 @@ class BaseAgent:
             return message.content
 
         return "已达到最大迭代次数，请尝试简化你的问题。"
+
+    async def run_stream(self, user_input: str):
+        context: list = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_input},
+        ]
+
+        print("正在思考...", "==" * 20)
+
+        for _ in range(MAX_ITERATIONS):
+            print(f"第 {_ + 1} 次迭代")
+            response, error = await self._call_llm_stream(context)
+            if error:
+                yield error
+                return
+            assert response is not None
+
+            tool_calls_acc: dict[int, dict] = {}  # 记录每个工具调用的索引和内容
+            content_parts: list[str] = []  # 记录每个delta的内容
+            reasoning_parts: list[str] = []  # 记录每个delta的推理内容
+
+            async for chunk in response:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta is None:
+                    continue
+
+                if delta.content:
+                    content_parts.append(delta.content)
+                    yield delta.content
+
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    reasoning_parts.append(reasoning)
+
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        func = tc_delta.function
+                        if func is None:
+                            continue
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {
+                                "id": tc_delta.id or "",
+                                "function": {
+                                    "name": func.name or "",
+                                    "arguments": func.arguments or "",
+                                },
+                            }
+                        else:
+                            if tc_delta.id:
+                                tool_calls_acc[idx]["id"] = tc_delta.id
+                            if func.name:
+                                tool_calls_acc[idx]["function"]["name"] += func.name
+                            if func.arguments:
+                                tool_calls_acc[idx]["function"][
+                                    "arguments"
+                                ] += func.arguments
+
+            if tool_calls_acc:
+                tc_objects = [
+                    SimpleNamespace(
+                        id=tc["id"],
+                        function=SimpleNamespace(
+                            name=tc["function"]["name"],
+                            arguments=tc["function"]["arguments"],
+                        ),
+                    )
+                    for tc in tool_calls_acc.values()
+                ]
+                message_like = SimpleNamespace(
+                    content="".join(content_parts),
+                    tool_calls=tc_objects,
+                    reasoning_content="".join(reasoning_parts) or None,
+                )
+                self._append_assistant_with_tools(context, message_like)
+                results = await self._execute_tools(tc_objects)
+                self._append_tool_results(context, tc_objects, results)
+                continue
+
+            return
+
+        yield "已达到最大迭代次数，请尝试简化你的问题。"
+
+    async def _call_llm(self, context: list):
+        try:
+            response = await self.client.chat.completions.create(
+                model=MODEL_NAME, messages=context, tools=TOOL_DEFINITIONS
+            )
+            return response.choices[0].message, None
+        except Exception as e:
+            print(f"[错误] API 调用失败：{e}")
+            return None, f"API 调用失败：{e}"
+
+    async def _call_llm_stream(self, context: list):
+        try:
+            response = await self.client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=context,
+                tools=TOOL_DEFINITIONS,
+                stream=True,
+            )
+            return response, None
+        except Exception as e:
+            print(f"[错误] API 调用失败：{e}")
+            return None, f"API 调用失败：{e}"
 
     def _append_assistant_with_tools(self, context: list[dict], message):
         """
