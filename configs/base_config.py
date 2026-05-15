@@ -41,3 +41,23 @@ MEMORY_FILE = os.path.join(
 )
 MEMORY_MAX_LOAD = 10  # 每次会话加载的最近记忆条数
 
+
+# ============================================================
+# 沙箱代码执行配置
+# ============================================================
+
+# 是否启用 Docker 沙箱（关闭后使用 subprocess 回退，安全性降低）
+DOCKER_ENABLED = os.getenv("DOCKER_ENABLED", "true").lower() == "true"
+
+# 沙箱默认超时（秒），范围 1-300
+SANDBOX_DEFAULT_TIMEOUT = int(os.getenv("SANDBOX_DEFAULT_TIMEOUT", "30"))
+
+# 沙箱最大内存（MB），范围 128-2048
+SANDBOX_MAX_MEMORY = int(os.getenv("SANDBOX_MAX_MEMORY", "512"))
+
+# 沙箱最大 CPU 核数，范围 0.1-4.0
+SANDBOX_MAX_CPU = float(os.getenv("SANDBOX_MAX_CPU", "1.0"))
+
+# 沙箱输出最大字节数（用于截断输出）
+SANDBOX_MAX_OUTPUT = int(os.getenv("SANDBOX_MAX_OUTPUT", "1048576"))
+

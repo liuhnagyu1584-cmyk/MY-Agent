@@ -3,3 +3,4 @@ python-dotenv==1.2.2
 pytz==2026.2
 geocoder==1.38.1
 ddgs==9.14.2
+docker>=7.1.0

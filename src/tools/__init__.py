@@ -9,6 +9,7 @@ from . import write_file
 from . import delete_file
 from . import edit_file
 from . import list_directory
+from . import execute_code
 
 TOOL_DEFINITIONS: list[ChatCompletionToolParam] = cast(
     list[ChatCompletionToolParam],
@@ -21,6 +22,7 @@ TOOL_DEFINITIONS: list[ChatCompletionToolParam] = cast(
         delete_file.definition,
         edit_file.definition,
         list_directory.definition,
+        execute_code.definition,
     ],
 )
 
@@ -33,5 +35,5 @@ TOOL_HANDLERS = {
     "delete_file": delete_file.handler,
     "edit_file": edit_file.handler,
     "list_directory": list_directory.handler,
-
+    "execute_code": execute_code.handler,
 }

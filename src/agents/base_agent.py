@@ -204,7 +204,10 @@ class BaseAgent:
 
             try:
                 args = json.loads(tc.function.arguments)
-                print(f"🧰 调用工具: {func_name} 📖 工具参数: {args[:50]}...", "=" * 20)
+                print(
+                    f"🧰 调用工具: {func_name} 📖 工具参数: {str(args)[:50]}...",
+                    "=" * 20,
+                )
                 if inspect.iscoroutinefunction(handler):
                     result = await handler(**args)
                 else:
@@ -227,10 +230,12 @@ class BaseAgent:
     def _load_memory(self, n: int):
         summary = self.memory_manager.load_recent(n)
         if summary:
-            self.context.append({
-                "role": "system",
-                "content": f"[历史记忆]\n以下是你在之前会话中与用户的互动摘要，可在对话中参考：\n{summary}",
-            })
+            self.context.append(
+                {
+                    "role": "system",
+                    "content": f"[历史记忆]\n以下是你在之前会话中与用户的互动摘要，可在对话中参考：\n{summary}",
+                }
+            )
             print(f"[记忆] 已加载最近 {n} 条历史记忆")
 
     async def save_memory(self):

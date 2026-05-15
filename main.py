@@ -26,7 +26,7 @@ async def continuous():
     while True:
         user_input = input("请输入: ")
         if user_input == "/exit" or user_input == "/q":
-            await agent.save_memory()
+            # await agent.save_memory()
             break
         if user_input == "/clear" or user_input == "/c":
             agent.clear_memory()
