@@ -32,4 +32,12 @@ WORKSPACE_ROOT = os.getenv(
 ALLOW_UNSAFE = os.getenv("ALLOW_UNSAFE", "false").lower() == "true"
 
 
-print(f"WORKSPACE_ROOT: {WORKSPACE_ROOT}")
+# ============================================================
+# 长期记忆配置
+# ============================================================
+MEMORY_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "memory.json"
+)
+MEMORY_MAX_LOAD = 10  # 每次会话加载的最近记忆条数
+

@@ -3,11 +3,14 @@ import json
 from types import SimpleNamespace
 from configs.base_config import (
     MAX_ITERATIONS,
+    MEMORY_FILE,
+    MEMORY_MAX_LOAD,
     MODEL_API_KEY,
     MODEL_BASE_URL,
     MODEL_NAME,
 )
 from openai import AsyncOpenAI
+from src.memory import MemoryManager
 from src.prompts.system_prompt import get_system_prompt
 from src.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
 
@@ -22,6 +25,9 @@ class BaseAgent:
         self.context: list = [
             {"role": "system", "content": self.system_prompt},
         ]
+
+        self.memory_manager = MemoryManager(MEMORY_FILE, self.client)
+        self._load_memory(MEMORY_MAX_LOAD)
 
     async def run(
         self,
@@ -198,7 +204,7 @@ class BaseAgent:
 
             try:
                 args = json.loads(tc.function.arguments)
-                print("🧰调用工具:", func_name, "📖工具参数", args, "=" * 20)
+                print(f"🧰 调用工具: {func_name} 📖 工具参数: {args[:50]}...", "=" * 20)
                 if inspect.iscoroutinefunction(handler):
                     result = await handler(**args)
                 else:
@@ -217,3 +223,22 @@ class BaseAgent:
         """
         for tc, result in zip(tool_calls, results):
             context.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+    def _load_memory(self, n: int):
+        summary = self.memory_manager.load_recent(n)
+        if summary:
+            self.context.append({
+                "role": "system",
+                "content": f"[历史记忆]\n以下是你在之前会话中与用户的互动摘要，可在对话中参考：\n{summary}",
+            })
+            print(f"[记忆] 已加载最近 {n} 条历史记忆")
+
+    async def save_memory(self):
+        print("[记忆] 正在总结本次会话...")
+        summary = await self.memory_manager.summarize(self.context)
+        self.memory_manager.save(summary)
+        print(f"[记忆] 已保存，摘要：{summary[:100]}...")
+
+    def clear_memory(self):
+        self.memory_manager.clear()
+        print("[记忆] 所有历史记忆已清空")

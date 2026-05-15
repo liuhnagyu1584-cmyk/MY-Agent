@@ -22,10 +22,15 @@ async def main_stream():
 
 async def continuous():
     agent = BaseAgent()
+    print("输入 /clear or /c 清空历史记忆，输入 /exit or /q 退出")
     while True:
         user_input = input("请输入: ")
-        if user_input == "exit" or user_input == "q":
+        if user_input == "/exit" or user_input == "/q":
+            await agent.save_memory()
             break
+        if user_input == "/clear" or user_input == "/c":
+            agent.clear_memory()
+            continue
         async for chunk in agent.run_stream(user_input):
             print(chunk, end="", flush=True)
         print("\n" + "=" * 60)
